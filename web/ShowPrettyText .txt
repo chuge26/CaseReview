@@ -1,0 +1,71 @@
+import { app } from "../../../scripts/app.js";
+import { ComfyWidgets } from "../../../scripts/widgets.js";
+
+app.registerExtension({
+    name: "Comfy.ShowPrettyText",
+    async beforeRegisterNodeDef(nodeType, nodeData) {
+        if (nodeData.name === "ShowPrettyText") {
+            const onExecuted = nodeType.prototype.onExecuted;
+            
+            nodeType.prototype.onExecuted = function(message) {
+                onExecuted?.apply(this, arguments);
+                
+                // 调试：检查 message 的内容
+                console.log("onExecuted - message:", message);
+
+                // 清除旧控件
+                while (this.widgets.length > 2) {
+                    this.widgets[this.widgets.length - 1].onRemove?.();
+                    this.widgets.pop();
+                }
+                
+                // 添加文本显示控件
+                const textWidget = ComfyWidgets.STRING(this, "result_text", 
+                    ["STRING", { multiline: true }], app).widget;
+                textWidget.inputEl.readOnly = true;
+                textWidget.inputEl.style.fontFamily = "monospace";
+                textWidget.value = message.text?.[0] || "No output";
+
+                // 调试：检查 textWidget 的值
+                console.log("textWidget.value:", textWidget.value);
+                
+                // 添加类型显示控件(关键修改：从message.type获取)
+                const typeWidget = ComfyWidgets.STRING(this, "result_type",
+                    ["STRING", { multiline: false }], app).widget;
+                typeWidget.inputEl.readOnly = true;
+                typeWidget.inputEl.style.opacity = 0.8;
+                typeWidget.inputEl.style.fontStyle = "italic";
+                typeWidget.inputEl.style.color = "#888";
+                typeWidget.value = message.type?.[0] || "TYPE NOT AVAILABLE";
+
+                // 调试：检查 typeWidget 的值
+                console.log("typeWidget.value:", typeWidget.value);
+                
+                // 调整节点大小
+                setTimeout(() => {
+                    const sz = this.computeSize();
+                    sz[0] = Math.max(sz[0], 300); // 最小宽度
+                    sz[1] = Math.max(sz[1], 200); // 最小高度
+                    this.onResize?.(sz);
+                    app.graph.setDirtyCanvas(true, false);
+                }, 0);
+            };
+            
+            // 保持工作流加载时的显示
+            const onConfigure = nodeType.prototype.onConfigure;
+            nodeType.prototype.onConfigure = function() {
+                onConfigure?.apply(this, arguments);
+
+                // 调试：检查 this.widgets_values 的内容
+                console.log("onConfigure - this.widgets_values:", this.widgets_values);
+
+                if (this.widgets_values?.length >= 2) {
+                    this.onExecuted({
+                        text: [this.widgets_values[0]],
+                        type: [this.widgets_values[1] || "TYPE NOT SAVED"]  // 处理未保存类型的情况
+                    });
+                }
+            };
+        }
+    }
+});
