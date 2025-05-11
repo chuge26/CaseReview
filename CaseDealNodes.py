@@ -939,47 +939,52 @@ class DiscrepancyIndexSearcher:
             error_msg = f"裁量基准检索出错: {str(e)}\n建议调整模糊识别参数后重试"
             print(error_msg)
             return (error_msg,)
+        
 
 class FinalReportInfoExtractor:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "text": ("STRING", {"forceInput": True}),
+                "text": ("STRING", {"multiline": True, "default": ""}),
             },
         }
-    
-    RETURN_TYPES = ("STRING")
-    RETURN_NAMES = ("case_report_info")
-    FUNCTION = "process_case_report"
-    OUTPUT_NODE = True
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("extracted_info",)
+    FUNCTION = "extract_info"
     CATEGORY = "CaseReview/案件处理"
 
-    def process_case_report(self, text):
-        """
-        处理案件报告文本，提取关键信息
-        """
+    @staticmethod
+    def safe_search(pattern, text, flags=0):
+        match = re.search(pattern, text, flags)
+        return match.group(1).strip() if match else ""
+
+    def extract_info(self, text):
+        info = {}
+        
         try:
-            # 调用自定义的解析函数
-            info = {}
-            info['案由'] = re.search(r'案由\s+(.+)', text).group(1).strip()
-            info['立案日期'] = re.search(r'立案日期\s+(\d{4} 年 \d{2} 月 \d{2} 日)', text).group(1).strip()
-            info['立案案号'] = re.search(r'立案案号\s+(.+)', text).group(1).strip()
-            info['当事人概况'] = re.search(r'当事人\s+概况\s+(.+)', text).group(1).strip()
-            info['调查取证主要经过'] = re.search(r'调查取证\s+主要经过\s+([\s\S]+?)案件主要', text).group(1).strip()
-            info['案件主要事实情况'] = re.search(r'案件主要\s+事实情况\s+([\s\S]+?)当事人', text).group(1).strip()
-            info['当事人意见及争议要点'] = re.search(r'当事人\s+意见及\s+争议要点\s+([\s\S]+?)主要证据', text).group(1).strip()
-            info['主要证据'] = re.search(r'主要证据\s+([\s\S]+?)承办人', text).group(1).strip()
-            info['承办人处理意见及理由'] = re.search(r'承办人\s+处理意见\s+及理由\s+([\s\S]+?)承办人签名', text).group(1).strip()
-            info['报告生成日期'] = re.search(r'承办人签名：\s+(\d{4} 年 \d{2} 月 \d{2} 日)', text).group(1).strip()
+            def safe_search(pattern, text, flags=0):
+                match = re.search(pattern, text, flags)
+                return match.group(1).strip() if match else ""
+            
+            info['案由'] = safe_search(r'案由\s+(.+)', text)
+            info['立案日期'] = safe_search(r'立案日期\s+(\d{4} 年 \d{2} 月 \d{2} 日)', text)
+            info['立案案号'] = safe_search(r'立案案号\s+(.+)', text)
+            info['当事人概况'] = safe_search(r'当事人\s+概况\s+(.+)', text)
+            info['调查取证主要经过'] = safe_search(r'调查取证\s+主要经过\s+([\s\S]+?)案件主要', text)
+            info['案件主要事实情况'] = safe_search(r'案件主要\s+事实情况\s+([\s\S]+?)当事人', text)
+            info['当事人意见及争议要点'] = safe_search(r'当事人\s+意见及\s+争议要点\s+([\s\S]+?)主要证据', text)
+            info['主要证据'] = safe_search(r'主要证据\s+([\s\S]+?)承办人', text)
+            info['承办人处理意见及理由'] = safe_search(r'承办人\s+处理意见\s+及理由\s+([\s\S]+?)承办人签名', text)
+            info['报告生成日期'] = safe_search(r'承办人签名：\s+(\d{4} 年 \d{2} 月 \d{2} 日)', text)
 
-            result_json = json.dumps(info, ensure_ascii=False, indent=4)
+            print(f"提取的信息: {info}")  # 调试信息
+            
         except Exception as e:
-            print(f"解析终结报告失败: {str(e)}")
-            result_json = f"解析终结报告失败: {str(e)}"
-
-        # 返回提取的结果
-        return (result_json,)
+            print(f"Error extracting information: {str(e)}")
+            return ("",)  # 返回空字符串而不是空字典
+        json_result = json.dumps(info, ensure_ascii=False, indent=2)
+        return (str(json_result),)
 
 
 class MultilineTextInputAdvanced:
