@@ -1,0 +1,8 @@
+rapidfuzz
+pytesseract
+configparser
+alibabacloud_tea_openapi
+alibabacloud_ocr_api20210707
+alibabacloud_tea_util
+alibabacloud_ocr20191230
+alibabacloud_credentials

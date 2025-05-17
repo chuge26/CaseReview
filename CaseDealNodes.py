@@ -83,9 +83,13 @@ class PDFExtractNode:
         }
 
     RETURN_TYPES = ("LIST", "LIST", "LIST", "LIST", "LIST", "LIST", "LIST")
+    # RETURN_NAMES = (
+    #     "调查询问笔录", "施工许可证", "身份证",
+    #     "营业执照", "整改情况", "授权委托书", "合同/协议"
+    # )
     RETURN_NAMES = (
-        "调查询问笔录", "施工许可证", "身份证",
-        "营业执照", "整改完成报告", "授权委托书", "合同/协议"
+        "材料1", "材料2", "材料3",
+        "材料4", "材料5", "材料6", "材料7"
     )
     FUNCTION = "process_pdf"
     CATEGORY = "CaseReview/PDF"
@@ -119,6 +123,10 @@ class PDFExtractNode:
 
     def extract_pages(self, doc, page_range: str) -> List[Dict]:
         """Extract specified pages from PDF document"""
+        if not page_range.strip():
+            print("No page range provided, skipping extraction.")
+            return []
+
         page_numbers = self.process_range_str(page_range, len(doc))
         extracted = []
         
@@ -172,7 +180,7 @@ class PDFItemExtractor:
         combined_text = ""
         merged_document = fitz.open()  # 仅在外部创建一次
 
-        print("当前pdf共有{}页".format(len(pdf_list))) # 调试信息
+        print("当前pdf共有{}页".format(len(pdf_list)))  # 调试信息
 
         for item in pdf_list:
             if not isinstance(item, dict):
@@ -191,83 +199,9 @@ class PDFItemExtractor:
                 temp_doc = fitz.open()
                 temp_doc.insert_pdf(src_doc, from_page=page_obj.number, to_page=page_obj.number)
                 merged_document.insert_pdf(temp_doc)
+                temp_doc.close()  # 关闭临时文档以释放资源
 
         return (combined_text.strip(), merged_document)
-
-
-# class PDFImageTextExtractor:
-#     """
-#     从图片型PDF提取文字（使用Tesseract OCR）
-#     """
-    
-#     @classmethod
-#     def INPUT_TYPES(cls):
-#         return {
-#             "required": {
-#                 "pdf_document": ("PDF_DOC",),
-#                 "page_range": ("STRING", {"default": "all", "description": "页码范围 (如 '1-3,5' 或 'all')"}),
-#                 "tesseract_path": ("STRING", {
-#                     "default": r"D:\Tesseract-OCR\tesseract.exe",
-#                     "description": "Tesseract可执行文件路径"
-#                 }),
-#                 "language": ("STRING", {"default": "chi_sim+eng", "description": "OCR语言代码 (如 'chi_sim'中文简体)"}),
-#                 "dpi": ("INT", {"default": 300, "min": 72, "max": 600, "description": "图像DPI"}),
-#             },
-#         }
-
-#     RETURN_TYPES = ("STRING",)
-#     RETURN_NAMES = ("识别文本",)
-#     FUNCTION = "extract_text"
-#     CATEGORY = "CaseReview/OCR"
-
-#     def parse_page_range(self, range_str: str, max_pages: int) -> List[int]:
-#         """解析页码范围字符串（支持 'all', '1-3,5' 等格式）"""
-#         if range_str.lower() == "all":
-#             return list(range(max_pages))
-        
-#         pages = set()
-#         for part in range_str.split(','):
-#             part = part.strip()
-#             if '-' in part:
-#                 start, end = map(int, part.split('-'))
-#                 pages.update(range(max(0, start-1), min(end, max_pages)))
-#             elif part.isdigit():
-#                 page_num = int(part) - 1
-#                 if 0 <= page_num < max_pages:
-#                     pages.add(page_num)
-        
-#         return sorted(pages)
-
-#     def extract_text(self, pdf_document, page_range: str, tesseract_path: str, language: str, dpi: int) -> str:
-#         # 配置Tesseract路径
-#         pytesseract.pytesseract.tesseract_cmd = tesseract_path
-        
-#         # 解析页码范围
-#         page_numbers = self.parse_page_range(page_range, len(pdf_document))
-#         combined_text = ""
-        
-#         for page_num in page_numbers:
-#             try:
-#                 page = pdf_document.load_page(page_num)
-#                 # 将PDF页面转换为高质量图像
-#                 pix = page.get_pixmap(matrix=fitz.Matrix(dpi/72, dpi/72))
-#                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-#                 # 在OCR前增强图像
-#                 img = img.convert('L')  # 灰度化
-#                 img = img.point(lambda x: 0 if x < 128 else 255)  # 二值化
-
-#                 # 使用Tesseract OCR识别
-#                 print("正在对pdf进行OCR识别...")
-#                 text = pytesseract.image_to_string(img, lang=language)
-#                 combined_text += f"==== 第 {page_num+1} 页 ====\n{text}\n\n"
-#                 print(f"第 {page_num+1} 页识别完成")
-                
-#             except Exception as e:
-#                 print(f"处理第 {page_num+1} 页时出错: {str(e)}")
-#                 continue
-                
-#         return (combined_text.strip(),)
-
 
 
 class PDFImageTextExtractor:
@@ -284,21 +218,23 @@ class PDFImageTextExtractor:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "pdf_document": ("PDF_DOC",),
-                "page_range": ("STRING", {"default": "all", "description": "页码范围 (如 '1-3,5' 或 'all')"}),
-                "ocr_engine": (["tesseract", "baidu"], {"default": "tesseract"}),
-                "language": ("STRING", {"default": "chi_sim+eng", "description": "OCR语言代码（Tesseract使用）"}),
+            "pdf_document": ("PDF_DOC",),
+            "page_range": ("STRING", {"default": "all", "description": "页码范围 (如 '1-3,5' 或 'all')"}),
+            "ocr_engine": (["tesseract", "baidu"], {"default": "tesseract"}),
+            "language": ("STRING", {"default": "chi_sim+eng", "description": "OCR语言代码（Tesseract使用）"}),
             },
             "optional": {
-                "tesseract_path": ("STRING", {
-                    "default": r"D:\Tesseract-OCR\tesseract.exe" if os.name == 'nt' else "/usr/bin/tesseract",
-                    "description": "Tesseract可执行文件路径（自动检测系统）"
-                }),
-                "dpi": ("INT", {"default": 300, "min": 72, "max": 600, "description": "图像DPI"}),
-                "config_path": ("STRING", {
-                    "default": "",
-                    "description": "自定义config.ini路径（留空则自动查找）"
-                }),
+            "tesseract_path": ("STRING", {
+                "default": r"D:\Tesseract-OCR\tesseract.exe" if os.name == 'nt' else "/usr/bin/tesseract",
+                "description": "Tesseract可执行文件路径（自动检测系统）"
+            }),
+            "dpi": ("INT", {"default": 300, "min": 72, "max": 600, "description": "图像DPI"}),
+            "config_path": ("STRING", {
+                "default": "",
+                "description": "自定义config.ini路径（留空则自动查找）"
+            }),
+            "detect_direction": ("BOOLEAN", {"default": True, "description": "是否检测文字方向"}),
+            "paragrap": ("BOOLEAN", {"default": True, "description": "是否合并段落"}),
             }
         }
 
@@ -366,7 +302,7 @@ class PDFImageTextExtractor:
                     pages.add(page_num)
         return sorted(pages)
 
-    def get_baidu_ocr_result(self, image_bytes: bytes) -> str:
+    def get_baidu_ocr_result(self, image_bytes: bytes, detect_direction, paragrap) -> str:
         """调用BaiduOCR API进行识别"""
         try:
             api_key = self.config.get('baidu_ocr', 'api_key')
@@ -389,6 +325,11 @@ class PDFImageTextExtractor:
             
             base64_data = base64.b64encode(image_bytes).decode('utf-8')
             payload = f'image={urllib.parse.quote_plus(base64_data)}'
+            config_set = '&detect_direction={}&paragrap={}'.format(
+                'true' if detect_direction else 'false',
+                'true' if paragrap else 'false'
+            )
+            payload = payload + config_set
             
             ocr_url = f"https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic?access_token={access_token}"
             headers = {'Content-Type': 'application/x-www-form-urlencoded',
@@ -413,7 +354,9 @@ class PDFImageTextExtractor:
         language: str,
         tesseract_path: Optional[str] = None,
         dpi: int = 300,
-        config_path: str = ""
+        config_path: str = "",
+        detect_direction: bool = True,
+        paragrap: bool = True
     ) -> Tuple[str]:
         
         if config_path:
@@ -431,7 +374,7 @@ class PDFImageTextExtractor:
                 if ocr_engine == "baidu":
                     print(f"正在使用百度OCR识别第 {page_num+1} 页...")
                     img_bytes = self._image_to_bytes(img, format='JPEG')
-                    text = self.get_baidu_ocr_result(img_bytes)
+                    text = self.get_baidu_ocr_result(img_bytes, detect_direction, paragrap)
                 else:
                     print(f"正在使用Tesseract识别第 {page_num+1} 页...")
                     if tesseract_path:
@@ -445,8 +388,8 @@ class PDFImageTextExtractor:
             except Exception as e:
                 print(f"处理第 {page_num+1} 页时出错: {str(e)}")
                 continue
-                
-        return ('\n\n'.join(combined_text).strip(),)
+        combined_text = '\n\n'.join(combined_text).strip()
+        return (combined_text,)
 
     def _image_to_bytes(self, img: Image.Image, format: str = 'JPEG') -> bytes:
         """将PIL图像转为字节流"""
@@ -620,10 +563,130 @@ class BusinessPageOCRNode:
         except Exception as e:
            return f"键值对翻译失败: {str(e)}"
 
+# class LLMNode:
+#     """
+#     DeepSeek LLM 调用节点
+#     功能：通过API调用DeepSeek模型，支持系统提示词和用户提示词双输入
+#     """
+    
+#     @classmethod
+#     def INPUT_TYPES(cls):
+#         return {
+#             "required": {
+#             "user_input": ("STRING", {"default": "", "multiline": True}),
+#             },
+#             "optional": {
+#             "system_prompt": ("STRING", {
+#                 "default": "你是一个有帮助的AI助手",
+#                 "multiline": True
+#             }),
+#             "model_name":  (["deepseek-chat", "silicon-QWen3-32B"], {"default": "deepseek-chat"
+#             }),
+#             "api_key": ("STRING", {
+#                 "default": "",
+#                 "description": "留空则尝试读取config.ini"
+#             }),
+#             "api_url": ("STRING", {
+#                 "default": "",
+#                 "description": "留空则尝试读取config.ini"
+#             }),
+#             }
+#         }
+
+#     RETURN_TYPES = ("STRING",)
+#     RETURN_NAMES = ("llm_output",)
+#     FUNCTION = "call_llm"
+#     CATEGORY = "CaseReview/AI"
+
+#     def __init__(self):
+#         self.config_file = Path(__file__).parent / "config.ini"
+#         self.config = self._load_config()
+
+#     def _load_config(self) -> dict:
+#         """读取配置文件"""
+#         config = {
+#             "api_url": "",
+#             "api_key": "",
+#             "temperature": 0.7,
+#             "max_tokens": 2048
+#         }
+        
+#         if self.config_file.exists():
+#             try:
+#                 parser = configparser.ConfigParser()
+#                 parser.read(self.config_file)
+#                 if "deepseek" in parser:
+#                     config.update({
+#                         "api_url": parser.get("deepseek", "api_url", fallback=""),
+#                         "api_key": parser.get("deepseek", "api_key", fallback=""),
+#                         "temperature": parser.getfloat("deepseek", "temperature", fallback=0.7),
+#                         "max_tokens": parser.getint("deepseek", "max_tokens", fallback=2048)
+#                     })
+#             except Exception as e:
+#                 print(f"[LLMNode] 配置文件读取失败: {str(e)}")
+#         return config
+
+#     def call_llm(self,
+#                 user_input: str,
+#                 system_prompt: str = "你是一个有帮助的AI助手",
+#                 model_name: str = "deepseek-chat",
+#                 api_key: Optional[str] = None,
+#                 api_url: Optional[str] = None) -> tuple:
+#         """
+#         调用DeepSeek API
+#         参数优先级：直接传入 > config.ini > 代码默认值
+#         """
+#         # 合并API配置
+#         final_api_key = api_key if api_key else self.config["api_key"]
+#         final_api_url = api_url if api_url else self.config["api_url"]
+        
+#         if not final_api_url or not final_api_key:
+#             raise ValueError("API配置缺失！请在节点输入或config.ini中设置api_url和api_key")
+
+#         headers = {
+#             "Content-Type": "application/json",
+#             "Authorization": f"Bearer {final_api_key}"
+#         }
+
+#         payload = {
+#             "model": model_name,
+#             "messages": [
+#                 {"role": "system", "content": system_prompt},
+#                 {"role": "user", "content": user_input}
+#             ],
+#             "temperature": self.config["temperature"],
+#             "max_tokens": self.config["max_tokens"],
+#             "stream": False
+#         }
+
+#         if user_input.strip().strip("==== 第 1 页 ===="):
+#             try:
+#                 print("正在发送信息至LLM...")
+#                 print(payload["messages"])
+#                 response = requests.post(
+#                     final_api_url,
+#                     headers=headers,
+#                     data=json.dumps(payload),
+#                     timeout=30
+#                 )
+#                 response.raise_for_status()
+                
+#                 result = response.json()
+#                 print("LLM返回结果:", result)
+#                 return (result["choices"][0]["message"]["content"],)
+            
+#             except requests.exceptions.RequestException as e:
+#                 error_msg = f"API请求失败: {str(e)}"
+#                 if hasattr(e, 'response') and e.response:
+#                     error_msg += f" | 状态码: {e.response.status_code} | 响应: {e.response.text}"
+#                 raise Exception(error_msg)
+#         else:
+#             return ("当前页面为空，不调用LLM",)
+
 class LLMNode:
     """
-    DeepSeek LLM 调用节点
-    功能：通过API调用DeepSeek模型，支持系统提示词和用户提示词双输入
+    LLM 调用节点 - 支持DeepSeek和硅基Qwen模型
+    功能：通过API调用LLM模型，支持系统提示词和用户提示词双输入
     """
     
     @classmethod
@@ -637,9 +700,8 @@ class LLMNode:
                     "default": "你是一个有帮助的AI助手",
                     "multiline": True
                 }),
-                "model_name": ("STRING", {
-                    "default": "deepseek-chat",
-                    "choices": ["deepseek-chat", "deepseek-coder"]
+                "model_name": (["deepseek-chat", "Qwen/QwQ-32B"], {
+                    "default": "Qwen/QwQ-32B"
                 }),
                 "api_key": ("STRING", {
                     "default": "",
@@ -648,6 +710,18 @@ class LLMNode:
                 "api_url": ("STRING", {
                     "default": "",
                     "description": "留空则尝试读取config.ini"
+                }),
+                "temperature": ("FLOAT", {
+                    "default": 0.7,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1
+                }),
+                "max_tokens": ("INT", {
+                    "default": 2048,
+                    "min": 1,
+                    "max": 8192,
+                    "step": 1
                 }),
             }
         }
@@ -660,86 +734,153 @@ class LLMNode:
     def __init__(self):
         self.config_file = Path(__file__).parent / "config.ini"
         self.config = self._load_config()
-
-    def _load_config(self) -> dict:
-        """读取配置文件"""
-        config = {
-            "api_url": "",
-            "api_key": "",
-            "temperature": 0.7,
-            "max_tokens": 2048
+        self.model_index = {
+            "deepseek-chat": 'LLM-deepseek-chat',
+            "Qwen/QwQ-32B": 'LLM-siliconflow-Qwen3-32B',
         }
+        self.model_configs = {
+            "deepseek-chat": {
+                "default_url": "https://api.deepseek.com/v1/chat/completions",
+                "required_params": ["model", "messages", "temperature", "max_tokens"],
+                "response_key_path": ["choices", 0, "message", "content"]
+            },
+            "Qwen/QwQ-32B": {
+                "default_url": "https://api.siliconflow.cn/v1/chat/completions",
+                "required_params": ["model", "messages", "temperature", "max_tokens"],
+                "response_key_path": ["choices", 0, "message", "content"],
+                "additional_params": {
+                    "min_p": 0.05,
+                    "top_p": 0.7,
+                    "top_k": 50,
+                    "frequency_penalty": 0.5,
+                    "response_format": {"type": "text"},
+                    "enable_thinking": True,
+                    "thinking_budget": 4096,
+                    "stop": [],
+                    "n": 1,
+                }
+            }
+        }
+
+    def _load_config(self) -> Dict[str, Any]:
+        """读取配置文件"""
+        # 初始化配置
+        config = {}
+
+        section_list = []
         
         if self.config_file.exists():
             try:
                 parser = configparser.ConfigParser()
                 parser.read(self.config_file)
-                if "deepseek" in parser:
-                    config.update({
-                        "api_url": parser.get("deepseek", "api_url", fallback=""),
-                        "api_key": parser.get("deepseek", "api_key", fallback=""),
-                        "temperature": parser.getfloat("deepseek", "temperature", fallback=0.7),
-                        "max_tokens": parser.getint("deepseek", "max_tokens", fallback=2048)
-                    })
+                section_list = [sections for sections in parser.sections() if str(sections).startswith('LLM')]  # 获取所有由[]包括的值，形成列表
+                # print("LLM-section_list:", section_list)  # 调试信息
+                
+                for section in section_list:
+                    config[section]= {"api_key": "", "api_url": "", "temperature": 0.7, "max_tokens": 2048}
+                    for key, value in parser.items(section):
+                        if isinstance(config[section][key], float):
+                            config[section][key] = parser.getfloat(section, key)
+                        elif isinstance(config[section][key], int):
+                            config[section][key] = parser.getint(section, key)
+                        else:
+                            config[section][key] = parser.get(section, key)
             except Exception as e:
                 print(f"[LLMNode] 配置文件读取失败: {str(e)}")
+            print("LLM-config:", config)  # 调试信息
         return config
+
+    def _build_payload(self, model_name: str, messages: list, temperature: float, max_tokens: int) -> Dict[str, Any]:
+        """构建请求负载"""
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False
+        }
+        
+        # 添加模型特定参数
+        if model_name in self.model_configs and "additional_params" in self.model_configs[model_name]:
+            payload.update(self.model_configs[model_name]["additional_params"])
+        
+        return payload
 
     def call_llm(self,
                 user_input: str,
                 system_prompt: str = "你是一个有帮助的AI助手",
                 model_name: str = "deepseek-chat",
                 api_key: Optional[str] = None,
-                api_url: Optional[str] = None) -> tuple:
+                api_url: Optional[str] = None,
+                temperature: Optional[float] = None,
+                max_tokens: Optional[int] = None) -> tuple:
         """
-        调用DeepSeek API
+        调用LLM API (支持DeepSeek和硅基Qwen)
         参数优先级：直接传入 > config.ini > 代码默认值
         """
-        # 合并API配置
-        final_api_key = api_key if api_key else self.config["api_key"]
-        final_api_url = api_url if api_url else self.config["api_url"]
-        
-        if not final_api_url or not final_api_key:
-            raise ValueError("API配置缺失！请在节点输入或config.ini中设置api_url和api_key")
+        # 合并配置参数
+        final_api_key = api_key if api_key else self.config[self.model_index[model_name]].get("api_key", "")
+        final_api_url = api_url if api_url else (
+            self.config[self.model_index[model_name]].get("api_url", "")
+        )
+        final_temperature = temperature if temperature is not None else self.config[self.model_index[model_name]].get("temperature", 0.7)
+        final_max_tokens = max_tokens if max_tokens is not None else self.config[self.model_index[model_name]].get("max_tokens", 2048)
 
+        print(f"当前模型: {model_name}")
+        print(f"API地址: {final_api_url}")
+        print(f"当前使用的api_key: {final_api_key}")
+        
+        # 验证必须参数
+        if not final_api_url:
+            raise ValueError(f"缺失API地址！请为{model_name}设置api_url")
+        if not final_api_key:
+            raise ValueError(f"缺失API密钥！请为{model_name}设置api_key")
+
+        # 准备请求数据
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {final_api_key}"
         }
 
-        payload = {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
-            ],
-            "temperature": self.config["temperature"],
-            "max_tokens": self.config["max_tokens"],
-            "stream": False
-        }
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input}
+        ]
+        
+        payload = self._build_payload(model_name, messages, final_temperature, final_max_tokens)
 
-        if user_input.strip().strip("==== 第 1 页 ===="):
-            try:
-                print("正在发送信息至LLM...")
-                print(payload["messages"])
-                response = requests.post(
-                    final_api_url,
-                    headers=headers,
-                    data=json.dumps(payload),
-                    timeout=30
-                )
-                response.raise_for_status()
-                
-                result = response.json()
-                return (result["choices"][0]["message"]["content"],)
-            
-            except requests.exceptions.RequestException as e:
-                error_msg = f"API请求失败: {str(e)}"
-                if hasattr(e, 'response') and e.response:
-                    error_msg += f" | 状态码: {e.response.status_code} | 响应: {e.response.text}"
-                raise Exception(error_msg)
-        else:
+        if not user_input.strip():
             return ("当前页面为空，不调用LLM",)
+
+        try:
+            print(f"正在发送信息至{model_name}...")
+            print("请求负载:", json.dumps(payload, indent=2, ensure_ascii=False))
+            
+            response = requests.post(
+                final_api_url,
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            print(f"{model_name}返回结果:", json.dumps(result, indent=2, ensure_ascii=False))
+            
+            # 从响应中提取结果
+            value = result
+            for key in self.model_configs[model_name]["response_key_path"]:
+                if isinstance(key, int):
+                    value = value[key]
+                else:
+                    value = value[key]
+            value = str(value).strip()
+            return (value,)
+            
+        except Exception as e:
+            error_msg = f"API请求失败: {str(e)}"
+            if hasattr(e, 'response') and e.response:
+                error_msg += f" | 状态码: {e.response.status_code} | 响应: {e.response.text}"
+            raise Exception(error_msg)
 
 
 class ReviewFileReader:
@@ -767,7 +908,7 @@ class ReviewFileReader:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("file_content",)
     FUNCTION = "read_file"
-    CATEGORY = "CaseReview/Prompt_Loading"
+    CATEGORY = "CaseReview/Text_Loading"
 
     @classmethod
     def _get_file_list(cls) -> List[str]:
@@ -784,6 +925,61 @@ class ReviewFileReader:
     def read_file(self, selected_file: str) -> Tuple[str]:
         """读取选定文件内容"""
         file_path = self.review_dir / selected_file
+        
+        if not file_path.exists():
+            raise FileNotFoundError(f"文件不存在: {file_path}")
+            
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return (content,)
+            
+        except Exception as e:
+            raise Exception(f"文件读取失败: {str(e)}")
+
+
+class OutputFileReader:
+    """
+    读取ComfyUI输出目录下的txt文件并输出内容
+    功能：通过下拉菜单选择文件，自动读取内容
+    """
+    
+    def __init__(self):
+        # 设置ComfyUI输出文件夹路径
+        self.output_dir = Path(__file__).parent.parent.parent / "output"
+        self.output_dir.mkdir(exist_ok=True)  # 如果文件夹不存在则创建
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        # 动态获取文件列表
+        file_list = cls._get_file_list()
+        
+        return {
+            "required": {
+                "selected_file": (file_list, {"default": file_list[0] if file_list else ""}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("file_content",)
+    FUNCTION = "read_file"
+    CATEGORY = "CaseReview/Text_Loading"
+
+    @classmethod
+    def _get_file_list(cls) -> List[str]:
+        """获取ComfyUI输出目录下的所有txt文件"""
+        output_dir = Path(__file__).parent.parent.parent / "output"
+        if not output_dir.exists():
+            return []
+            
+        return sorted(
+            [f.name for f in output_dir.glob("*.txt") if f.is_file()],
+            key=lambda x: x.lower()
+        )
+
+    def read_file(self, selected_file: str) -> Tuple[str]:
+        """读取选定文件内容"""
+        file_path = self.output_dir / selected_file
         
         if not file_path.exists():
             raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -815,41 +1011,46 @@ class JSONKeyExtractor:
     FUNCTION = "process_dict"
     CATEGORY = "CaseReview/文本处理"
 
+    def get_nested_value(self, data, keys):
+        """递归获取嵌套字典中的值"""
+        if not keys or not isinstance(data, dict):
+            return None
+        key = keys[0]
+        print("key:", key)
+        if key in data:
+            if len(keys) == 1:
+                return data[key]
+            return self.get_nested_value(data[key], keys[1:])
+        return None
+
     def process_dict(self, text_dict, key_to_extract, text_input=None):
         try:
-            # 调试打印所有输入
-            print(f"原始输入 - text_dict: {text_dict}")
-            print(f"原始输入 - text_input: {text_input}")
-            print(f"text_dict type: {type(text_dict)}, value: {text_dict}")
-            print(f"text_input type: {type(text_input)}, value: {text_input}")
-            print(f"key_to_extract: {key_to_extract}")
-
-            # 确定使用哪个输入源
             dict_text = text_input if text_input is not None and text_input != '' else text_dict
             dict_text = dict_text.strip()
             print(f"最终使用的输入文本: {dict_text}")
 
-            # 检查输入是否为空
             if not dict_text or dict_text.strip() == '':
                 raise ValueError("输入文本为空")
-            
-            # 确保输入是有效的字典字符串
+
             if not isinstance(dict_text, str):
                 raise ValueError("输入必须是字符串格式的字典")
-                
-            # 将单引号转换为双引号以符合JSON标准
-            dict_text = dict_text.replace("'", "\"")
-            
-            # 解析为字典
+
+            dict_text = re.sub(r"(?<!\\)'", '"', dict_text)
+            dict_text = dict_text.replace("None", "null")
             data_dict = json.loads(dict_text)
-            
-            # 如果有提取key的要求，则只返回对应的value
-            if key_to_extract and key_to_extract in data_dict:
-                return (str(data_dict[key_to_extract]),)
-            
-            # 否则返回整个字典的JSON
+            print(f"解析后的字典: {data_dict}")
+
+            # 支持嵌套键提取
+            if key_to_extract:
+                keys = key_to_extract.split(".")  # 使用 "." 分隔嵌套路径
+                value = self.get_nested_value(data_dict, keys)
+                if value is not None:
+                    print(f"提取的值: {value}")
+                    return (str(value),)
+
+            print("提取失败，返回整个字典的JSON")
             return (json.dumps(data_dict, ensure_ascii=False, indent=2),)
-            
+
         except json.JSONDecodeError as e:
             print(f"JSON解析错误: {str(e)}")
             return (f"错误: 无法解析字典 - {dict_text}",)
@@ -983,7 +1184,7 @@ class FinalReportInfoExtractor:
         except Exception as e:
             print(f"Error extracting information: {str(e)}")
             return ("",)  # 返回空字符串而不是空字典
-        json_result = json.dumps(info, ensure_ascii=False, indent=2)
+        json_result = json.dumps(info, ensure_ascii=False, indent=4)
         return (str(json_result),)
 
 
@@ -1052,58 +1253,46 @@ class ShowPrettyText:
         }
     
     INPUT_IS_LIST = True
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("result", "type")
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
     FUNCTION = "process_text"
     OUTPUT_NODE = True
-    OUTPUT_IS_LIST = (True, True)
+    OUTPUT_IS_LIST = (False,)
     CATEGORY = "CaseReview/文本处理"
-
-    def process_text(self, 
-                   text: List[str], 
-                   unique_id: str = None, 
-                   extra_pnginfo: Dict = None) -> Dict[str, Any]:
+    def process_text(self, text, unique_id=None, extra_pnginfo=None):
         # 获取输入文本(从列表中取出第一个元素)
         input_text = text[0] if text else ""
         print(f"输入文本: {input_text}")  # 调试信息
-        print(f"输入文本类型: {type(input_text)}")  # 调试信息
-        
         # 初始化结果
         result = input_text
-        result_type = "plain_text"
-
-        text = input_text.replace("'", '"')
-        text = input_text.replace("True", "true")
-        text = input_text.replace("False", "false")
-
-        # 尝试解析为JSON
+        # 尝试解析为JSON/字典/列表
         if input_text.strip().startswith(('{', '[')):
             try:
                 parsed_data = json.loads(input_text)
-                pp = pprint.PrettyPrinter(indent=2, width=70)
-                result = pp.pformat(parsed_data)
-                result_type = f"json_{type(parsed_data).__name__}"
-                return self._prepare_output(result, result_type)
+                result = json.dumps(parsed_data, indent=2, ensure_ascii=False)
             except json.JSONDecodeError:
-                pass
-
-        # 特殊格式处理
-        if isinstance(input_text, str) and '\n' in input_text:
-            # 多行文本保持原样，但可以添加一些格式处理
-            result = pprint.pformat(input_text, indent=2, width=70)
-            result_type = "multiline_text"
-        
-        return self._prepare_output(result, result_type)
-
-    def _prepare_output(self, result: str, result_type: str) -> Dict[str, Any]:
-        """准备输出格式"""
-        return {
-            "ui": {
-                "text": [result],
-                "type": [result_type]
-            },
-            "result": ([result], [result_type])
-        }
+                # JSON解析失败尝试使用pprint
+                try:
+                    pp = pprint.PrettyPrinter(indent=2, width=80)
+                    result = pp.pformat(eval(input_text))
+                except:
+                    pass
+        # 更新节点显示
+        if unique_id is not None and extra_pnginfo is not None:
+            if hasattr(extra_pnginfo, "workflow"):
+                workflow = extra_pnginfo.workflow
+            elif isinstance(extra_pnginfo, list) and len(extra_pnginfo) > 0:
+                if "workflow" in extra_pnginfo[0]:
+                    workflow = extra_pnginfo[0]["workflow"]
+            if workflow:
+                node = next(
+                    (x for x in workflow["nodes"] if str(x["id"]) == str(unique_id)),
+                    None,
+                )
+                if node:
+                    node["widgets_values"] = [result]
+        # print("result:", result)  # 调试信息
+        return {"ui": {"text": [result]}, "result": (result,)}
 
 
 
@@ -1174,6 +1363,13 @@ class StringToJson:
                 result[key] = f"{result[key]} {line.strip()}" if result[key] else line.strip()
                 if not result[key]:
                     result[key] = line.strip()
+
+        # 用于解决多行跟随问题，只取分隔符之后的第一个非空值
+        for key in result.keys():
+            if isinstance(result[key], str):
+                result[key] = result[key].split()[0]
+            else:
+                pass
 
         # 提取违法行为
         try:
