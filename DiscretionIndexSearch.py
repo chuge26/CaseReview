@@ -193,7 +193,6 @@ class DiscretionIndex:
         try:
             # 初始化结果字典
             final_result = {}
-            law_info_set = []  # 用于存储去重后的法律信息
             
             with pd.ExcelFile(file_path) as xls:
                 # 第一步：处理"案由数据"sheet
@@ -209,7 +208,11 @@ class DiscretionIndex:
                     
                     pbar.update(20)
                     
-                    # 找到目标字符串所在的行（模糊匹配）
+                    # 找到目标字符串所在的行（精确匹配）
+                    # match_rows = case_df[case_df['违法行为'].str.strip() == aim_str.strip()]
+
+                    # 应用模糊匹配
+                    # match_rows = case_df[case_df['违法行为'].apply(lambda x: self.fuzzy_match(x, aim_str))]
                     case_df['匹配度'] = case_df['违法行为'].apply(lambda x: fuzz.partial_ratio(x, aim_str) if not pd.isna(x) else 0)
                     max_score = case_df['匹配度'].max()
                     
@@ -252,11 +255,8 @@ class DiscretionIndex:
                     law_records = law_df[law_df['案由编号'] == case_info['案由编号']]
                     legal_basis = []
                     if not law_records.empty:
-                        for _, row in law_records.iterrows():
-                            if self.is_empty(row['法律依据']):
-                                continue
-                            
-                            law_entry = {
+                        legal_basis = [
+                            {
                                 '法律名称': row['法律名称'] if not self.is_empty(row['法律名称']) else None,
                                 '依据条款': row['依据条款'] if not self.is_empty(row['依据条款']) else None,
                                 '法律依据': row['法律依据'] if not self.is_empty(row['法律依据']) else None,
@@ -264,14 +264,9 @@ class DiscretionIndex:
                                 '法律责任': row['法律责任'] if not self.is_empty(row['法律责任']) else None,
                                 '具体责任': row['具体责任'] if not self.is_empty(row['具体责任']) else None,
                             }
-                            
-                            # 去重并生成 LawID
-                            if law_entry not in law_info_set:
-                                law_info_set.append(law_entry)
-                            
-                            # 获取 LawID
-                            law_id = law_info_set.index(law_entry)
-                            legal_basis.append(law_id)
+                            for _, row in law_records.iterrows()
+                            if not self.is_empty(row['法律依据'])
+                        ]
                     
                     pbar.update(20)
                     
@@ -301,9 +296,11 @@ class DiscretionIndex:
                                 '处罚下限': row['处罚下限'] if not self.is_empty(row['处罚下限']) else None,
                                 '处罚上限': row['处罚上限'] if not self.is_empty(row['处罚上限']) else None,
                                 '裁量基准': row['裁量基准'] if not self.is_empty(row['裁量基准']) else None,
-                                **case_info,
-                                'LawID': legal_basis  # 替换为 LawID
+                                **case_info
                             }
+                            
+                            if legal_basis:
+                                record['法律信息'] = legal_basis
                             
                             # 安全清理空值并添加记录
                             record = {k: v for k, v in record.items() if not self.is_empty(v)}
@@ -314,30 +311,24 @@ class DiscretionIndex:
                     
                     pbar.update(30)
             
-            # 将法律信息放到最外层
-            output = {
-                '法律信息': law_info_set,
-                '裁量基准': final_result
-            }
-            
-            return json.dumps(output, ensure_ascii=False, indent=2)
+            return json.dumps(final_result, ensure_ascii=False, indent=2)
         
         except Exception as e:
             raise Exception(f"处理过程中出错: {str(e)}")
 
-if __name__ == "__main__":
-    processor = DiscretionIndex()
+# if __name__ == "__main__":
+#     processor = DiscretionIndex()
     
-    aim_str = "未取得施工许可证或者为规避办理施工许可证将工程项目分解后擅自施工"
-    print("开始处理数据...")
-    with tqdm(total=100) as pbar:
-        result_json1 = processor.process_professional_data(aim_str)
-        print('result_json1', result_json1)
-        result_json2 = processor.process_urban_data(aim_str)
-        print('result_json2', result_json2)
-        pbar.update(100)
+#     aim_str = "未取得施工许可证或者为规避办理施工许可证将工程项目分解后擅自施"
+#     print("开始处理数据...")
+#     with tqdm(total=100) as pbar:
+#         result_json1 = processor.process_professional_data(aim_str)
+#         print('result_json1', result_json1)
+#         result_json2 = processor.process_urban_data(aim_str)
+#         print('result_json2', result_json2)
+#         pbar.update(100)
     
-    print("\n处理完成！结果如下：")
-    print(str(result_json1) + '\n' + str(result_json2))
+#     print("\n处理完成！结果如下：")
+#     print(str(result_json1) + '\n' + str(result_json2))
 
 

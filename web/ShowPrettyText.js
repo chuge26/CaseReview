@@ -2,57 +2,65 @@ import { app } from "../../../scripts/app.js";
 import { ComfyWidgets } from "../../../scripts/widgets.js";
 
 app.registerExtension({
-    name: "CaseReview.ShowPrettyText",
-    async beforeRegisterNodeDef(nodeType, nodeData, app) {
+    name: "Comfy.ShowPrettyText",
+    async beforeRegisterNodeDef(nodeType, nodeData) {
         if (nodeData.name === "ShowPrettyText") {
-            function populate(text) {
-                if (this.widgets) {
-                    // 清除旧的小部件
-                    for (let i = 1; i < this.widgets.length; i++) {
-                        this.widgets[i].onRemove?.();
-                    }
-                    this.widgets.length = 1;
+            const onExecuted = nodeType.prototype.onExecuted;
+            
+            nodeType.prototype.onExecuted = function(message) {
+                onExecuted?.apply(this, arguments);
+
+                console.log("ShowPrettyText executed", message);
+
+                console.log("this.widgets", this.widgets);
+                
+                // 清除旧控件
+                while (this.widgets.length > 2) {
+                    this.widgets[this.widgets.length - 1].onRemove?.();
+                    this.widgets.pop();
                 }
+                
+                // 添加结果显示控件
+                const resultWidget = ComfyWidgets.STRING(this, "result", 
+                    ["STRING", { multiline: true }], app).widget;
 
-                // 创建显示文本的小部件
-                const widget = ComfyWidgets["STRING"](
-                    this, 
-                    "pretty_text", 
-                    ["STRING", { multiline: true }], 
-                    app
-                ).widget;
+                console.log("resultWidget", resultWidget)
+                resultWidget.inputEl.readOnly = true;
+                resultWidget.inputEl.style.fontFamily = "monospace";
+                resultWidget.value = message.text?.[0] || "";
+                
+                // 添加类型显示控件
+                const typeWidget = ComfyWidgets.STRING(this, "result_type", 
+                    ["STRING", { multiline: true }], app).widget;
 
-                // 设置小部件属性
-                widget.inputEl.readOnly = true;
-                widget.inputEl.style.opacity = 0.8;
-                widget.inputEl.style.fontFamily = "monospace";
-                widget.value = text[0] || "";
-
+                console.log("typeWidget", typeWidget);
+                typeWidget.inputEl.readOnly = true;
+                typeWidget.inputEl.style.fontStyle = "italic";
+                typeWidget.inputEl.style.opacity = 0.7;
+                typeWidget.value = message.type?.[0] || "";
+                
+                
                 // 调整节点大小
-                requestAnimationFrame(() => {
+                setTimeout(() => {
                     const sz = this.computeSize();
-                    sz[0] = 400;  // 固定宽度
-                    sz[1] = Math.max(200, this.computeSize()[1]);  // 最小高度200
+                    sz[0] = Math.max(sz[0], 300); // 最小宽度
+                    sz[1] = Math.max(sz[1], 200); // 最小高度
                     this.onResize?.(sz);
                     app.graph.setDirtyCanvas(true, false);
-                });
-            }
-
-            // 节点执行时更新显示
-            const onExecuted = nodeType.prototype.onExecuted;
-            nodeType.prototype.onExecuted = function (message) {
-                onExecuted?.apply(this, arguments);
-                populate.call(this, message.text);
+                }, 0);
             };
-
-            // 节点配置时初始化显示
+            
+            // 保持工作流加载时的显示
             const onConfigure = nodeType.prototype.onConfigure;
-            nodeType.prototype.onConfigure = function () {
+            nodeType.prototype.onConfigure = function() {
                 onConfigure?.apply(this, arguments);
-                if (this.widgets_values?.length) {
-                    populate.call(this, [this.widgets_values[0]]);
+                if (this.widgets_values?.length >= 2) {
+                    this.onExecuted({
+                        text: [this.widgets_values[0]],
+                        type: [this.widgets_values[1]]
+                    });
                 }
             };
         }
-    },
+    }
 });
